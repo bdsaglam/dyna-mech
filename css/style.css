@@ -1,0 +1,12 @@
+QDialog {
+    background: #e3e6ed;
+}
+
+QLabel {
+    font-family: Lucida Sans Unicode;
+    font-size: 12px;
+}
+
+QLineEdit {
+    text-align: right;
+}
