@@ -20,7 +20,10 @@ class SliderCrank:
             + 2 * r2 * r3 * np.sin(theta12) * np.sin(theta13)
         )
 
-        result = {'theta12': theta12, 'theta13': theta13, 's14': s14}
+        result = {
+            'r2': r2, 'r3': r3, 'theta12': theta12,
+            'theta13': theta13, 's14': s14,
+        }
         return result
 
 
@@ -41,12 +44,13 @@ class Scissor:
         self.mass = mass
 
     def solve(self, theta12):
-        m = self.mass
-        p2 = self.second_link_total
         result = self.slider_crank.solve(theta12)
         s14 = result['s14']
 
-        result['torque'] = -1 * m * g * s14 * (np.cos(theta12) ** -2)
-        result['H'] = p2 * np.sin(theta12)
+        result['torque'] = -1 * self.mass * g * s14 * (np.cos(theta12) ** -2)
+        result['H'] = self.second_link_total * np.sin(theta12)
 
+        result['mass'] = self.mass
+        result['p2'] = self.first_link_total
+        result['p3'] = self.second_link_total
         return result

@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
-
 import sys
 
 import numpy as np
-
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import matplotlib.patheffects as pe
+from matplotlib.patches import Rectangle
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QDialog, QMainWindow,
     QGridLayout, QHBoxLayout, QVBoxLayout,
-    QPushButton, QLabel, QLineEdit, QSlider
+    QPushButton, QLabel, QLineEdit, QSlider, QSizePolicy
 )
 
 from PyQt5.QtGui import QIcon, QPixmap, QValidator, QIntValidator, QDoubleValidator
@@ -21,6 +21,9 @@ from PyQt5.QtCore import Qt, pyqtSlot
 from mechanisms import Scissor
 
 SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
+
+stopper1 = (0.214, 0)
+stopper2 = (0.366, 0)
 
 
 class FormWidget(QWidget):
@@ -31,35 +34,36 @@ class FormWidget(QWidget):
         self.result = None
         self.movement_graph = None
         self.torque_graph = None
+        self.animation_graph = None
         self.safety_factor = 1
         self.init_ui()
         self.set_default_values()
 
     def init_ui(self):
         # input - mechanism parameters
-        r1_label = QLabel('r1')
-        self.r1_edit = QLineEdit()
-        self.r1_edit.setAlignment(Qt.AlignRight | Qt.AlignBottom)
-        self.r1_edit.setValidator(QDoubleValidator(bottom=0))
-        r1_unitlabel = QLabel('mm')
-
-        p1_label = QLabel('p1')
-        self.p1_edit = QLineEdit()
-        self.p1_edit.setAlignment(Qt.AlignRight | Qt.AlignBottom)
-        self.p1_edit.setValidator(QDoubleValidator(bottom=0))
-        p1_unitlabel = QLabel('mm')
-
-        r2_label = QLabel('r2')
+        r2_label = QLabel('r1')
         self.r2_edit = QLineEdit()
         self.r2_edit.setAlignment(Qt.AlignRight | Qt.AlignBottom)
         self.r2_edit.setValidator(QDoubleValidator(bottom=0))
         r2_unitlabel = QLabel('mm')
 
-        p2_label = QLabel('p2')
+        p2_label = QLabel('p1')
         self.p2_edit = QLineEdit()
         self.p2_edit.setAlignment(Qt.AlignRight | Qt.AlignBottom)
         self.p2_edit.setValidator(QDoubleValidator(bottom=0))
         p2_unitlabel = QLabel('mm')
+
+        r3_label = QLabel('r2')
+        self.r3_edit = QLineEdit()
+        self.r3_edit.setAlignment(Qt.AlignRight | Qt.AlignBottom)
+        self.r3_edit.setValidator(QDoubleValidator(bottom=0))
+        r3_unitlabel = QLabel('mm')
+
+        p3_label = QLabel('p2')
+        self.p3_edit = QLineEdit()
+        self.p3_edit.setAlignment(Qt.AlignRight | Qt.AlignBottom)
+        self.p3_edit.setValidator(QDoubleValidator(bottom=0))
+        p3_unitlabel = QLabel('mm')
 
         mass_label = QLabel('mass')
         self.mass_edit = QLineEdit()
@@ -70,21 +74,21 @@ class FormWidget(QWidget):
         parameters_grid = QGridLayout()
         parameters_grid.setSpacing(10)
 
-        parameters_grid.addWidget(r1_label, 0, 0)
-        parameters_grid.addWidget(self.r1_edit, 0, 1)
-        parameters_grid.addWidget(r1_unitlabel, 0, 2)
+        parameters_grid.addWidget(r2_label, 0, 0)
+        parameters_grid.addWidget(self.r2_edit, 0, 1)
+        parameters_grid.addWidget(r2_unitlabel, 0, 2)
 
-        parameters_grid.addWidget(p1_label, 1, 0)
-        parameters_grid.addWidget(self.p1_edit, 1, 1)
-        parameters_grid.addWidget(p1_unitlabel, 1, 2)
+        parameters_grid.addWidget(p2_label, 1, 0)
+        parameters_grid.addWidget(self.p2_edit, 1, 1)
+        parameters_grid.addWidget(p2_unitlabel, 1, 2)
 
-        parameters_grid.addWidget(r2_label, 2, 0)
-        parameters_grid.addWidget(self.r2_edit, 2, 1)
-        parameters_grid.addWidget(r2_unitlabel, 2, 2)
+        parameters_grid.addWidget(r3_label, 2, 0)
+        parameters_grid.addWidget(self.r3_edit, 2, 1)
+        parameters_grid.addWidget(r3_unitlabel, 2, 2)
 
-        parameters_grid.addWidget(p2_label, 3, 0)
-        parameters_grid.addWidget(self.p2_edit, 3, 1)
-        parameters_grid.addWidget(p2_unitlabel, 3, 2)
+        parameters_grid.addWidget(p3_label, 3, 0)
+        parameters_grid.addWidget(self.p3_edit, 3, 1)
+        parameters_grid.addWidget(p3_unitlabel, 3, 2)
 
         parameters_grid.addWidget(mass_label, 4, 0)
         parameters_grid.addWidget(self.mass_edit, 4, 1)
@@ -156,10 +160,12 @@ class FormWidget(QWidget):
 
         self.calculateButton = QPushButton("Calculate")
         self.plotButton = QPushButton("Plot")
+        self.animateButton = QPushButton("Animate")
 
-        actionButtonBox = QHBoxLayout()
+        actionButtonBox = QVBoxLayout()
         actionButtonBox.addWidget(self.calculateButton)
         actionButtonBox.addWidget(self.plotButton)
+        actionButtonBox.addWidget(self.animateButton)
 
         prBox = QVBoxLayout()
         prBox.addLayout(parameters_grid)
@@ -186,30 +192,41 @@ class FormWidget(QWidget):
 
         self.setLayout(hbox)
 
+        # style
         with open("./css/style.css", "r") as f:
             self.setStyleSheet(f.read())
 
         x = int(SCREEN_WIDTH * 0.05)
         y = int(SCREEN_HEIGHT * 0.05)
-        w = int(SCREEN_WIDTH * 0.75)
+        w = int(SCREEN_WIDTH * 0.6)
         h = int(SCREEN_HEIGHT * 0.4)
         self.setGeometry(x, y, w, h)
 
         self.setWindowTitle('Slider Crank')
 
         # SIGNAL & SLOT
+        self.r2_edit.textChanged.connect(self.hide)
+        self.p2_edit.textChanged.connect(self.hide)
+        self.r3_edit.textChanged.connect(self.hide)
+        self.p3_edit.textChanged.connect(self.hide)
+        self.mass_edit.textChanged.connect(self.hide)
+        self.theta12_start_edit.textChanged.connect(self.hide)
+        self.theta12_end_edit.textChanged.connect(self.hide)
+
+        self.sf_slider.valueChanged.connect(self.refresh_safety_factor)
+
         self.calculateButton.clicked.connect(self.calculate)
         self.plotButton.clicked.connect(self.plot)
-        self.sf_slider.valueChanged.connect(self.refresh_result_ui)
+        self.animateButton.clicked.connect(self.animate)
 
     def set_default_values(self):
         self.theta12_start_edit.setText("45")
         self.theta12_end_edit.setText("-45")
 
-        self.r1_edit.setText("185")
-        self.p1_edit.setText("405")
         self.r2_edit.setText("185")
         self.p2_edit.setText("405")
+        self.r3_edit.setText("185")
+        self.p3_edit.setText("405")
         self.mass_edit.setText("6")
 
     def parse(self, element):
@@ -223,15 +240,50 @@ class FormWidget(QWidget):
         return None
 
     @pyqtSlot()
+    def hide(self):
+        self.torque_edit.setText('')
+        self.positionX_edit.setText('')
+        self.positionZ_edit.setText('')
+        self.plotButton.setVisible(False)
+        self.animateButton.setVisible(False)
+
+    @pyqtSlot()
+    def calculate(self):
+        r2 = self.parse(self.r2_edit) / 1000
+        p2 = self.parse(self.p2_edit) / 1000
+        r3 = self.parse(self.r3_edit) / 1000
+        p3 = self.parse(self.p3_edit) / 1000
+        theta12_start = self.parse(self.theta12_start_edit)
+        theta12_end = self.parse(self.theta12_end_edit)
+        theta12_step = 0.5
+        if theta12_start > theta12_end:
+            theta12_step = -0.5
+
+        mass = self.parse(self.mass_edit)
+
+        if None in [r2, p2, r3, p3, mass, theta12_start, theta12_end]:
+            return
+
+        self.mechanism = Scissor(first_link=r2, second_link=r3, first_link_total=p2, second_link_total=p3, mass=mass)
+
+        theta12 = np.deg2rad(np.arange(theta12_start, theta12_end, theta12_step))
+        result = self.mechanism.solve(theta12)
+
+        # update fields
+        self.result = result
+
+        # update results
+        self.refresh_result_ui()
+
+    @pyqtSlot()
     def refresh_result_ui(self):
-        self.safety_factor = self.sf_slider.value()/10.0
-        self.sf_value_label.setText("{:.1f}".format(self.safety_factor))
+        self.safety_factor = self.sf_slider.value() / 10.0
 
         if self.result:
             # update ui
             torque = self.result['torque']
 
-            torque_max = np.around(np.max(np.abs(torque)), decimals=2)*self.safety_factor
+            torque_max = np.around(np.max(np.abs(torque)), decimals=2) * self.safety_factor
 
             H = self.result['H']
             H_max = np.max(np.abs(H))
@@ -243,41 +295,26 @@ class FormWidget(QWidget):
             self.positionX_edit.setText('{:d}'.format(X))
             self.positionZ_edit.setText('{:d}'.format(Z))
 
+            self.plotButton.setVisible(True)
+            self.animateButton.setVisible(True)
 
     @pyqtSlot()
-    def calculate(self):
-        r1 = self.parse(self.r1_edit) / 1000
-        p1 = self.parse(self.p1_edit) / 1000
-        r2 = self.parse(self.r2_edit) / 1000
-        p2 = self.parse(self.p2_edit) / 1000
-        theta12_start = self.parse(self.theta12_start_edit)
-        theta12_end = self.parse(self.theta12_end_edit)
-        theta12_step = 0.5
-        if theta12_start > theta12_end:
-            theta12_step = -0.5
+    def refresh_safety_factor(self):
+        self.safety_factor = self.sf_slider.value() / 10.0
+        self.sf_value_label.setText("{:.1f}".format(self.safety_factor))
 
-        mass = self.parse(self.mass_edit)
+        if self.result:
+            # update ui
+            torque = self.result['torque']
 
-        if None in [r1, p1, r2, p2, mass]:
-            return
-
-        self.mechanism = Scissor(first_link=r1, second_link=r2, first_link_total=p1, second_link_total=p2, mass=mass)
-
-        theta12 = np.deg2rad(np.arange(theta12_start, theta12_end, theta12_step))
-        result = self.mechanism.solve(theta12)
-
-        # update fields
-        self.result = result
-
-        # update results
-        self.refresh_result_ui()
-
-        print(r1, p1, r2, p2, mass)
-        print(self.result)
-        print("calculated..")
+            torque_max = np.around(np.max(np.abs(torque)), decimals=2) * self.safety_factor
+            self.torque_edit.setText('{:.2f}'.format(torque_max))
 
     @pyqtSlot()
     def plot(self):
+        if not self.result:
+            return
+
         self.plot_angles()
         self.plot_torque()
 
@@ -292,6 +329,16 @@ class FormWidget(QWidget):
         self.torque_graph.show()
         self.torque_graph.raise_()
         self.torque_graph.activateWindow()
+
+    @pyqtSlot()
+    def animate(self):
+        if not self.result:
+            return
+
+        self.animation_graph = MechAnimation(data=self.result, parent=self)
+        self.animation_graph.show()
+        self.animation_graph.raise_()
+        self.animation_graph.activateWindow()
 
 
 class FigureView(QDialog):
@@ -336,15 +383,15 @@ class MovementGraph(FigureView):
 
         ax1, ax2, ax3 = self.axes
 
-        ax1.plot(np.rad2deg(theta12), np.rad2deg(theta13), color="blue", linewidth=2.5, label=r'$\theta_{13}$')
-        ax2.plot(np.rad2deg(theta12), s14 * 1000, color="red", linewidth=2.5, label=r'$s_{14}$')
+        ax1.plot(np.rad2deg(theta12), np.rad2deg(theta13), color="red", linewidth=2.5, label=r'$\theta_{13}$')
+        ax2.plot(np.rad2deg(theta12), s14 * 1000, color="green", linewidth=2.5, label=r'$s_{14}$')
         ax3.plot(np.rad2deg(theta12), (H - 0.250) * -1 * 1000, color="blue", linewidth=2.5, label=r'$H$')
 
         ax1.grid(True)
         ax1.set_ylabel(r'$\theta_{13}$ [°]')
 
         ax2.grid(True)
-        ax2.set_ylabel("S14 [mm]")
+        ax2.set_ylabel(r'$s_{14}$ [mm]')
 
         ax3.grid(True)
         ax3.set_ylabel("H [mm]")
@@ -360,7 +407,7 @@ class MovementGraph(FigureView):
 
 class TorqueGraph(FigureView):
     def createFigureAxes(self):
-        figure, axes = plt.subplots(nrows=1, ncols=1, figsize=(4, 3), dpi=80)
+        figure, axes = plt.subplots(nrows=1, ncols=1, figsize=(4, 4), dpi=80)
         return figure, (axes,)
 
     def plot(self, data):
@@ -375,11 +422,154 @@ class TorqueGraph(FigureView):
         ax1.set_ylabel("Tork [N*m]")
 
         x = int(SCREEN_WIDTH * 0.05)
-        y = int(SCREEN_HEIGHT * 0.5)
+        y = int(SCREEN_HEIGHT * 0.50)
         w = int(SCREEN_WIDTH * 0.4)
         h = int(SCREEN_HEIGHT * 0.4)
         self.setGeometry(x, y, w, h)
         self.canvas.draw()
+
+
+class MyFuncAnimation(animation.FuncAnimation):
+    """
+    Unfortunately, it seems that the _blit_clear method of the Animation
+    class contains an error in several matplotlib verions
+    That's why, I fork it here and insert the latest git version of
+    the function.
+    """
+
+    def _blit_clear(self, artists, bg_cache):
+        # Get a list of the axes that need clearing from the artists that
+        # have been drawn. Grab the appropriate saved background from the
+        # cache and restore.
+        axes = set(a.axes for a in artists)
+        for a in axes:
+            if a in bg_cache:  # this is the previously missing line
+                a.figure.canvas.restore_region(bg_cache[a])
+
+
+class MechAnimation(QDialog):
+    def __init__(self, data, parent=None):
+        super().__init__(parent)
+
+        fig = plt.figure(figsize=(8, 8), dpi=100)
+        canvas = FigureCanvas(fig)
+        ax = fig.add_subplot(111)  # create an axis
+
+        # axis props
+        ax.set_aspect('equal', 'box')
+        ax.set_xlim((-0.6 * 1000, 0.9 * 1000))
+        ax.set_ylim((-0.4 * 1000, 1.1 * 1000))
+
+        ax.spines['right'].set_color('none')
+        ax.spines['top'].set_color('none')
+        ax.spines['bottom'].set_color('none')
+        ax.spines['left'].set_color('none')
+
+        ax.tick_params(
+            which='both',  # both major and minor ticks are affected
+            bottom=False,  # ticks along the bottom edge are off
+            top=False,  # ticks along the top edge are off
+            left=False,
+            right=False,
+            labelbottom=False,  # labels along the bottom edge are off
+            labelleft=False)
+
+        self.fig = fig
+        self.ax = ax
+        self.canvas = canvas
+        self.data = data
+
+        # set the layout
+        layout = QVBoxLayout()
+        layout.addWidget(self.canvas)
+        self.setLayout(layout)
+
+        # geometry
+        x = int(SCREEN_WIDTH * 0.2)
+        y = int(SCREEN_HEIGHT * 0.2)
+        w = int(SCREEN_WIDTH * 0.4)
+        h = int(SCREEN_HEIGHT * 0.4)
+        self.setGeometry(x, y, w, h)
+
+        #
+        self.start()
+
+    @pyqtSlot()
+    def start(self):
+        theta12 = self.data['theta12']
+        half_cycle = np.arange(len(theta12))
+        full_cycle = np.concatenate([half_cycle, half_cycle[::-1]])
+
+        self.animation = MyFuncAnimation(self.fig, self.animate, init_func=self.init,
+                                         frames=full_cycle, interval=5, repeat=True, blit=True)
+        self.canvas.draw()
+
+    def init(self):
+        ax = self.ax
+
+        # static elements
+        pointA = ax.text(-0.05 * 1000, -0.01 * 1000, 'M', color='r')
+
+        ax.plot([stopper1[0] * 1000 * 0.98, stopper2[0] * 1000 * 1.02],
+                [stopper1[1] * 1000, stopper2[1] * 1000],
+                color='w', lw=10, path_effects=[pe.Stroke(linewidth=15, foreground='gray'), pe.Normal()])
+
+        pointStoppers, = ax.plot([stopper1[0] * 1000, stopper2[0] * 1000],
+                                 [stopper1[1] * 1000, stopper2[1] * 1000],
+                                 color='w', alpha=1, marker='h', mfc='r', ms=10)
+
+        # dynamic elements
+        line2, = ax.plot([], [], marker='o', c='k', lw=3, ms=5)
+        line3, = ax.plot([], [], marker='o', c='k', lw=3, ms=5)
+        pointB, = ax.plot([], [], marker='o', c='y', lw=3, ms=10, mfc='none', markeredgewidth=5)
+        pointC, = ax.plot([], [], marker='o', c='y', lw=3, ms=10, mfc='none', markeredgewidth=5)
+        pointD, = ax.plot([], [], marker='o', c='y', lw=3, ms=10, mfc='none', markeredgewidth=5)
+
+        glass = Rectangle((0, 0), width=800, height=700, fc='blue', alpha=0.1)
+        ax.add_patch(glass)
+
+        self.line2 = line2
+        self.line3 = line3
+        self.pointB = pointB
+        self.pointC = pointC
+        self.pointD = pointD
+        self.glass = glass
+
+        return line2, line3, pointB, pointC, pointD, glass
+
+    def animate(self, i):
+        r2 = self.data['r2']
+        p2 = self.data['p2']
+        r3 = self.data['r3']
+        p3 = self.data['p3']
+
+        th12 = self.data['theta12'][i]
+        th13 = self.data['theta13'][i]
+        s = self.data['s14'][i]
+
+        coordinateD = (s + p3 * np.cos(th13 - np.pi)), (p3 * np.sin(th13 - np.pi))
+        coordinateGlass = coordinateD[0] - 0.2, coordinateD[1]
+
+        self.line2.set_data([0 * 1000, r2 * np.cos(th12) * 1000, p2 * np.cos(th12) * 1000],
+                            [0 * 1000, r2 * np.sin(th12) * 1000, p2 * np.sin(th12) * 1000])
+
+        self.line3.set_data([s * 1000, (s + p3 * np.cos(th13 - np.pi)) * 1000],
+                            [0 * 1000, (p3 * np.sin(th13 - np.pi)) * 1000])
+
+        self.pointB.set_data([s * 1000],
+                             [0 * 1000])
+
+        self.pointC.set_data([p2 * np.cos(th12) * 1000],
+                             [p2 * np.sin(th12) * 1000])
+
+        self.pointD.set_data([coordinateD[0] * 1000],
+                             [coordinateD[1] * 1000])
+
+        self.glass.set_xy((coordinateGlass[0] * 1000, coordinateGlass[1] * 1000))
+
+        self.canvas.draw()
+
+        return self.line2, self.line3, self.pointB, self.pointC, self.pointD, self.glass
 
 
 if __name__ == '__main__':
@@ -389,3 +579,4 @@ if __name__ == '__main__':
     form = FormWidget()
     form.show()
     sys.exit(app.exec_())
+

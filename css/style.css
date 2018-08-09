@@ -10,3 +10,7 @@ QLabel {
 QLineEdit {
     text-align: right;
 }
+
+QSlider {
+    min-width: 100px;
+}
