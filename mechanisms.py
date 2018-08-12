@@ -48,7 +48,7 @@ class Scissor:
         s14 = result['s14']
 
         result['torque'] = -1 * self.mass * g * s14 * (np.cos(theta12) ** -2)
-        result['H'] = self.second_link_total * np.sin(theta12)
+        result['H'] = self.first_link_total * np.sin(theta12)
 
         result['mass'] = self.mass
         result['p2'] = self.first_link_total

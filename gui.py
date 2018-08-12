@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import sys
-
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -9,6 +9,7 @@ from matplotlib.patches import Rectangle
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
+import PyQt5
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QDialog, QMainWindow,
     QGridLayout, QHBoxLayout, QVBoxLayout,
@@ -20,6 +21,22 @@ from PyQt5.QtCore import Qt, pyqtSlot
 
 from mechanisms import Scissor
 
+# bundle vs source path
+frozen = False
+if getattr(sys, 'frozen', False):
+    # we are running in a bundle
+    frozen = True
+    bundle_dir = sys._MEIPASS
+else:
+    # we are running in a normal Python environment
+    bundle_dir = os.path.dirname(os.path.abspath(__file__))
+
+
+def get_abs_path(relative_path):
+    return os.path.abspath(os.path.join(bundle_dir, relative_path))
+
+
+# GLOBAL VARIABLES
 SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
 
 stopper1 = (0.214, 0)
@@ -35,7 +52,7 @@ class FormWidget(QWidget):
         self.movement_graph = None
         self.torque_graph = None
         self.animation_graph = None
-        self.safety_factor = 1
+        self.safety_factor = 1.5
         self.init_ui()
         self.set_default_values()
 
@@ -46,24 +63,28 @@ class FormWidget(QWidget):
         self.r2_edit.setAlignment(Qt.AlignRight | Qt.AlignBottom)
         self.r2_edit.setValidator(QDoubleValidator(bottom=0))
         r2_unitlabel = QLabel('mm')
+        self.r2_button = QPushButton('?')
 
         p2_label = QLabel('p1')
         self.p2_edit = QLineEdit()
         self.p2_edit.setAlignment(Qt.AlignRight | Qt.AlignBottom)
         self.p2_edit.setValidator(QDoubleValidator(bottom=0))
         p2_unitlabel = QLabel('mm')
+        self.p2_button = QPushButton('?')
 
         r3_label = QLabel('r2')
         self.r3_edit = QLineEdit()
         self.r3_edit.setAlignment(Qt.AlignRight | Qt.AlignBottom)
         self.r3_edit.setValidator(QDoubleValidator(bottom=0))
         r3_unitlabel = QLabel('mm')
+        self.r3_button = QPushButton('?')
 
         p3_label = QLabel('p2')
         self.p3_edit = QLineEdit()
         self.p3_edit.setAlignment(Qt.AlignRight | Qt.AlignBottom)
         self.p3_edit.setValidator(QDoubleValidator(bottom=0))
         p3_unitlabel = QLabel('mm')
+        self.p3_button = QPushButton('?')
 
         mass_label = QLabel('mass')
         self.mass_edit = QLineEdit()
@@ -77,18 +98,22 @@ class FormWidget(QWidget):
         parameters_grid.addWidget(r2_label, 0, 0)
         parameters_grid.addWidget(self.r2_edit, 0, 1)
         parameters_grid.addWidget(r2_unitlabel, 0, 2)
+        parameters_grid.addWidget(self.r2_button, 0, 3)
 
         parameters_grid.addWidget(p2_label, 1, 0)
         parameters_grid.addWidget(self.p2_edit, 1, 1)
         parameters_grid.addWidget(p2_unitlabel, 1, 2)
+        parameters_grid.addWidget(self.p2_button, 1, 3)
 
         parameters_grid.addWidget(r3_label, 2, 0)
         parameters_grid.addWidget(self.r3_edit, 2, 1)
         parameters_grid.addWidget(r3_unitlabel, 2, 2)
+        parameters_grid.addWidget(self.r3_button, 2, 3)
 
         parameters_grid.addWidget(p3_label, 3, 0)
         parameters_grid.addWidget(self.p3_edit, 3, 1)
         parameters_grid.addWidget(p3_unitlabel, 3, 2)
+        parameters_grid.addWidget(self.p3_button, 3, 3)
 
         parameters_grid.addWidget(mass_label, 4, 0)
         parameters_grid.addWidget(self.mass_edit, 4, 1)
@@ -115,6 +140,7 @@ class FormWidget(QWidget):
         self.sf_slider = QSlider(Qt.Horizontal)
         self.sf_slider.setRange(10, 100)
         self.sf_slider.setTickInterval(1)
+        self.sf_slider.setSliderPosition(self.safety_factor * 10)
         self.sf_slider.setSingleStep(1)
         self.sf_value_label = QLabel('{:.1f}'.format(self.safety_factor))
         self.sf_value_label.setFixedWidth(30)
@@ -134,6 +160,12 @@ class FormWidget(QWidget):
         self.torque_edit.setAlignment(Qt.AlignRight | Qt.AlignBottom)
         torque_unitlabel = QLabel('N.m')
 
+        glass_height_label = QLabel('Window Opening')
+        self.glass_height_edit = QLineEdit()
+        self.glass_height_edit.setReadOnly(True)
+        self.glass_height_edit.setAlignment(Qt.AlignRight | Qt.AlignBottom)
+        glass_height_unitlabel = QLabel('mm')
+
         positionX_label = QLabel('X')
         self.positionX_edit = QLineEdit()
         self.positionX_edit.setReadOnly(True)
@@ -150,13 +182,17 @@ class FormWidget(QWidget):
         results_grid.addWidget(self.torque_edit, 0, 1)
         results_grid.addWidget(torque_unitlabel, 0, 2)
 
-        results_grid.addWidget(self.positionX_edit, 1, 1)
-        results_grid.addWidget(positionX_label, 1, 0)
-        results_grid.addWidget(positionX_unitlabel, 1, 2)
+        results_grid.addWidget(glass_height_label, 1, 0)
+        results_grid.addWidget(self.glass_height_edit, 1, 1)
+        results_grid.addWidget(glass_height_unitlabel, 1, 2)
 
-        results_grid.addWidget(positionZ_label, 2, 0)
-        results_grid.addWidget(self.positionZ_edit, 2, 1)
-        results_grid.addWidget(positionZ_unitlabel, 2, 2)
+        results_grid.addWidget(positionX_label, 2, 0)
+        results_grid.addWidget(self.positionX_edit, 2, 1)
+        results_grid.addWidget(positionX_unitlabel, 2, 2)
+
+        results_grid.addWidget(positionZ_label, 3, 0)
+        results_grid.addWidget(self.positionZ_edit, 3, 1)
+        results_grid.addWidget(positionZ_unitlabel, 3, 2)
 
         self.calculateButton = QPushButton("Calculate")
         self.plotButton = QPushButton("Plot")
@@ -177,12 +213,12 @@ class FormWidget(QWidget):
 
         mechanismImageLabel = QLabel()
         mechanismImage = QPixmap()
-        mechanismImage.load('./img/mechanism.jpeg')
+        mechanismImage.load(get_abs_path('./img/mechanism.jpeg'))
         mechanismImageLabel.setPixmap(mechanismImage)
 
         doorImageLabel = QLabel()
         doorImage = QPixmap()
-        doorImage.load('./img/door.png')
+        doorImage.load(get_abs_path('./img/door.png'))
         doorImageLabel.setPixmap(doorImage)
 
         hbox = QHBoxLayout()
@@ -191,10 +227,6 @@ class FormWidget(QWidget):
         hbox.addWidget(doorImageLabel)
 
         self.setLayout(hbox)
-
-        # style
-        with open("./css/style.css", "r") as f:
-            self.setStyleSheet(f.read())
 
         x = int(SCREEN_WIDTH * 0.05)
         y = int(SCREEN_HEIGHT * 0.05)
@@ -219,6 +251,11 @@ class FormWidget(QWidget):
         self.plotButton.clicked.connect(self.plot)
         self.animateButton.clicked.connect(self.animate)
 
+        self.r2_button.clicked.connect(self.showImage)
+        self.p2_button.clicked.connect(self.showImage)
+        self.r3_button.clicked.connect(self.showImage)
+        self.p3_button.clicked.connect(self.showImage)
+
     def set_default_values(self):
         self.theta12_start_edit.setText("45")
         self.theta12_end_edit.setText("-45")
@@ -238,6 +275,24 @@ class FormWidget(QWidget):
             return float(textInput)
 
         return None
+
+    @pyqtSlot()
+    def showImage(self):
+        sending_button = self.sender()
+        img_src = ""
+        if sending_button is self.r2_button:
+            img_src = get_abs_path("./img/r2.png")
+        elif sending_button is self.p2_button:
+            img_src = get_abs_path("./img/p2.png")
+        elif sending_button is self.r3_button:
+            img_src = get_abs_path("./img/r3.png")
+        elif sending_button is self.p3_button:
+            img_src = get_abs_path("./img/p3.png")
+
+        img_pop = PopupImage(img_src=img_src, parent=self)
+        img_pop.show()
+        img_pop.raise_()
+        img_pop.activateWindow()
 
     @pyqtSlot()
     def hide(self):
@@ -266,7 +321,7 @@ class FormWidget(QWidget):
 
         self.mechanism = Scissor(first_link=r2, second_link=r3, first_link_total=p2, second_link_total=p3, mass=mass)
 
-        theta12 = np.deg2rad(np.arange(theta12_start, theta12_end, theta12_step))
+        theta12 = np.deg2rad(np.arange(theta12_start, theta12_end + theta12_step, theta12_step))
         result = self.mechanism.solve(theta12)
 
         # update fields
@@ -286,12 +341,14 @@ class FormWidget(QWidget):
             torque_max = np.around(np.max(np.abs(torque)), decimals=2) * self.safety_factor
 
             H = self.result['H']
+            glass_height = int(np.abs(H.max() - H.min()) * 1000)
+
             H_max = np.max(np.abs(H))
             Z = int(H_max + 0.772) * 1000
-
             X = 500 - 329
 
             self.torque_edit.setText('{:.2f}'.format(torque_max))
+            self.glass_height_edit.setText('{:d}'.format(glass_height))
             self.positionX_edit.setText('{:d}'.format(X))
             self.positionZ_edit.setText('{:d}'.format(Z))
 
@@ -314,6 +371,10 @@ class FormWidget(QWidget):
     def plot(self):
         if not self.result:
             return
+
+        theta12_start = self.parse(self.theta12_start_edit)
+        theta12_end = self.parse(self.theta12_end_edit)
+        self.result['xlim'] = (theta12_start, theta12_end)
 
         self.plot_angles()
         self.plot_torque()
@@ -339,6 +400,27 @@ class FormWidget(QWidget):
         self.animation_graph.show()
         self.animation_graph.raise_()
         self.animation_graph.activateWindow()
+
+
+class PopupImage(QDialog):
+    def __init__(self, img_src, parent=None):
+        super().__init__(parent)
+
+        # VIEW
+        self.setAttribute(Qt.WA_DeleteOnClose)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowSystemMenuHint | Qt.WindowMinMaxButtonsHint)
+
+        # Image
+        imageLabel = QLabel()
+        image = QPixmap()
+        image.load(img_src)
+        imageLabel.setPixmap(image)
+
+        # LAYOUT
+        layout = QVBoxLayout()
+        layout.addWidget(imageLabel)
+        self.setLayout(layout)
+        self.show()
 
 
 class FigureView(QDialog):
@@ -385,7 +467,7 @@ class MovementGraph(FigureView):
 
         ax1.plot(np.rad2deg(theta12), np.rad2deg(theta13), color="red", linewidth=2.5, label=r'$\theta_{13}$')
         ax2.plot(np.rad2deg(theta12), s14 * 1000, color="green", linewidth=2.5, label=r'$s_{14}$')
-        ax3.plot(np.rad2deg(theta12), (H - 0.250) * -1 * 1000, color="blue", linewidth=2.5, label=r'$H$')
+        ax3.plot(np.rad2deg(theta12), H * 1000, color="blue", linewidth=2.5, label=r'$H$')
 
         ax1.grid(True)
         ax1.set_ylabel(r'$\theta_{13}$ [°]')
@@ -396,6 +478,7 @@ class MovementGraph(FigureView):
         ax3.grid(True)
         ax3.set_ylabel("H [mm]")
         ax3.set_xlabel(r'$\theta_{12}$ [°]')
+        ax3.set_xlim(data['xlim'])
 
         x = int(SCREEN_WIDTH * 0.5)
         y = int(SCREEN_HEIGHT * 0.05)
@@ -579,4 +662,3 @@ if __name__ == '__main__':
     form = FormWidget()
     form.show()
     sys.exit(app.exec_())
-
