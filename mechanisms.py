@@ -43,14 +43,27 @@ class Scissor:
 
         self.mass = mass
 
-    def solve(self, theta12):
+    def solve(self, theta12, motorque=None):
         result = self.slider_crank.solve(theta12)
+
+        m = self.mass
+        r2 = self.slider_crank.first_link
+        p2 = self.first_link_total
+        r3 = self.slider_crank.second_link
+        p3 = self.second_link_total
         s14 = result['s14']
 
-        result['torque'] = -1 * self.mass * g * s14 * (np.cos(theta12) ** -2)
-        result['H'] = self.first_link_total * np.sin(theta12)
+        if motorque is None:
+            cg_offset = 0
+        else:
+            cg_offset = max(-2 * motorque / (m * g) + p2 - p3 + 2 * r2, 0)
 
-        result['mass'] = self.mass
-        result['p2'] = self.first_link_total
-        result['p3'] = self.second_link_total
+        result['torque'] = m * g / 2 * (-p2 + p3 - 2 * r2 + cg_offset) * np.cos(theta12)
+        result['H'] = p2 * np.sin(theta12)
+
+        result['mass'] = m
+        result['p2'] = p2
+        result['p3'] = p3
+        result['cg_offset'] = cg_offset
+        result['motorque'] = motorque
         return result

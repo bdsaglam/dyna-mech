@@ -2,11 +2,15 @@
 
 block_cipher = None
 
+added_files = [
+         ( './img', 'img' ),
+         ( './css', 'css' ),
+         ]
 
 a = Analysis(['gui.py'],
              pathex=['/Users/bdsaglam/Code/code-python/Dyna/bmc'],
              binaries=[],
-             datas=[],
+             datas = added_files,
              hiddenimports=[],
              hookspath=[],
              runtime_hooks=[],

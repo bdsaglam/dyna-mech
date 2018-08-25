@@ -92,6 +92,12 @@ class FormWidget(QWidget):
         self.mass_edit.setValidator(QDoubleValidator(bottom=0))
         mass_unitlabel = QLabel('kg')
 
+        motorque_label = QLabel('motor torque')
+        self.motorque_edit = QLineEdit()
+        self.motorque_edit.setAlignment(Qt.AlignRight | Qt.AlignBottom)
+        self.motorque_edit.setValidator(QDoubleValidator(bottom=0))
+        motorque_unitlabel = QLabel('N.m')
+
         parameters_grid = QGridLayout()
         parameters_grid.setSpacing(10)
 
@@ -118,6 +124,10 @@ class FormWidget(QWidget):
         parameters_grid.addWidget(mass_label, 4, 0)
         parameters_grid.addWidget(self.mass_edit, 4, 1)
         parameters_grid.addWidget(mass_unitlabel, 4, 2)
+
+        parameters_grid.addWidget(motorque_label, 5, 0)
+        parameters_grid.addWidget(self.motorque_edit, 5, 1)
+        parameters_grid.addWidget(motorque_unitlabel, 5, 2)
 
         # input - theta12
         self.theta12_start_edit = QLineEdit()
@@ -154,7 +164,7 @@ class FormWidget(QWidget):
         results_grid = QGridLayout()
         results_grid.setSpacing(10)
 
-        torque_label = QLabel('Torque')
+        torque_label = QLabel('Required torque')
         self.torque_edit = QLineEdit()
         self.torque_edit.setReadOnly(True)
         self.torque_edit.setAlignment(Qt.AlignRight | Qt.AlignBottom)
@@ -228,6 +238,9 @@ class FormWidget(QWidget):
 
         self.setLayout(hbox)
 
+        with open(get_abs_path("./css/style.css"), "r") as f:
+            self.setStyleSheet(f.read())
+
         x = int(SCREEN_WIDTH * 0.05)
         y = int(SCREEN_HEIGHT * 0.05)
         w = int(SCREEN_WIDTH * 0.6)
@@ -242,6 +255,7 @@ class FormWidget(QWidget):
         self.r3_edit.textChanged.connect(self.hide)
         self.p3_edit.textChanged.connect(self.hide)
         self.mass_edit.textChanged.connect(self.hide)
+        self.motorque_edit.textChanged.connect(self.hide)
         self.theta12_start_edit.textChanged.connect(self.hide)
         self.theta12_end_edit.textChanged.connect(self.hide)
 
@@ -264,7 +278,8 @@ class FormWidget(QWidget):
         self.p2_edit.setText("405")
         self.r3_edit.setText("185")
         self.p3_edit.setText("405")
-        self.mass_edit.setText("6")
+        self.mass_edit.setText("5.4")
+        self.motorque_edit.setText("")
 
     def parse(self, element):
         textInput = element.text()
@@ -308,6 +323,8 @@ class FormWidget(QWidget):
         p2 = self.parse(self.p2_edit) / 1000
         r3 = self.parse(self.r3_edit) / 1000
         p3 = self.parse(self.p3_edit) / 1000
+        motorque = self.parse(self.motorque_edit)
+
         theta12_start = self.parse(self.theta12_start_edit)
         theta12_end = self.parse(self.theta12_end_edit)
         theta12_step = 0.5
@@ -322,7 +339,7 @@ class FormWidget(QWidget):
         self.mechanism = Scissor(first_link=r2, second_link=r3, first_link_total=p2, second_link_total=p3, mass=mass)
 
         theta12 = np.deg2rad(np.arange(theta12_start, theta12_end + theta12_step, theta12_step))
-        result = self.mechanism.solve(theta12)
+        result = self.mechanism.solve(theta12, motorque)
 
         # update fields
         self.result = result
@@ -336,8 +353,9 @@ class FormWidget(QWidget):
 
         if self.result:
             # update ui
+            theta12 = self.result['theta12']
             torque = self.result['torque']
-
+            cg_offset = self.result['cg_offset'] * np.cos(max(np.abs(theta12)))
             torque_max = np.around(np.max(np.abs(torque)), decimals=2) * self.safety_factor
 
             H = self.result['H']
@@ -345,7 +363,7 @@ class FormWidget(QWidget):
 
             H_max = np.max(np.abs(H))
             Z = int(H_max + 0.772) * 1000
-            X = 500 - 329
+            X = 500 - 329 - int(cg_offset * 1000)
 
             self.torque_edit.setText('{:.2f}'.format(torque_max))
             self.glass_height_edit.setText('{:d}'.format(glass_height))
@@ -503,6 +521,7 @@ class TorqueGraph(FigureView):
         ax1.grid(True)
         ax1.set_xlabel(r'$\theta_{12}$ [°]')
         ax1.set_ylabel("Tork [N*m]")
+        ax1.set_xlim(data['xlim'])
 
         x = int(SCREEN_WIDTH * 0.05)
         y = int(SCREEN_HEIGHT * 0.50)
