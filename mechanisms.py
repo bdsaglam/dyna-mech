@@ -56,9 +56,9 @@ class Scissor:
         if motorque is None:
             cg_offset = 0
         else:
-            cg_offset = max(-motorque / (m * g) + p2 - p3 + 2 * r2, 0)
+            cg_offset = max(-motorque / (m * g) + (p2 - p3)/2 + r2, 0)
 
-        result['torque'] = m * g / 2 * (-p2 + p3 - 2 * r2 + 2 * cg_offset) * np.cos(theta12)
+        result['torque'] = -m * g * (cg_offset - (p2 - p3) / 2 - r2) * np.cos(theta12)
         result['H'] = p2 * np.sin(theta12)
 
         result['mass'] = m
